@@ -95,8 +95,8 @@ def log_request():
     except:
         all_entries = []
 
-    # Render page
-    return render_template_string(TEMPLATE, all_entries=all_entries)
+    # Render page with enumerate passed explicitly
+    return render_template_string(TEMPLATE, all_entries=all_entries, enumerate=enumerate)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000)
