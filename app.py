@@ -6,6 +6,8 @@ import os
 
 app = Flask(__name__)
 
+LOG_FILE = "logs.txt"
+
 TEMPLATE = """
 <!doctype html>
 <html>
@@ -17,6 +19,7 @@ body { font-family: Arial; padding:20px; max-width:800px; margin:auto; }
 table { width:100%; border-collapse: collapse; }
 th, td { border:1px solid #ccc; padding:8px; text-align:left; }
 th { background:#f4f4f4; }
+pre { white-space: pre-wrap; word-wrap: break-word; }
 </style>
 </head>
 <body>
@@ -42,54 +45,57 @@ th { background:#f4f4f4; }
 </html>
 """
 
-LOG_FILE = "logs.txt"
-
-def simple_parse_user_agent(ua):
-    return ua or "Unknown"
-
 @app.route('/')
 def log_request():
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    if ip and ',' in ip:
+    # Get visitor IP
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr) or "0.0.0.0"
+    if ',' in ip:
         ip = ip.split(',')[0].strip()
-    ua = request.headers.get('User-Agent', '')
 
-    # Geolocation
+    # Get User-Agent
+    ua = request.headers.get('User-Agent', 'Unknown')
+
+    # Get Geolocation safely
     geo = {}
     try:
-        resp = requests.get(f"https://ipapi.co/{ip}/json/", timeout=5)
+        resp = requests.get(f"https://ipapi.co/{ip}/json/", timeout=3)
         if resp.status_code == 200:
             geo = resp.json()
-    except:
+    except Exception:
         geo = {}
 
+    # Build entry
     entry = {
-        "timestamp": datetime.datetime.utcnow().isoformat()+"Z",
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
         "ip": ip,
-        "city": geo.get("city"),
-        "region": geo.get("region"),
-        "country": geo.get("country_name"),
-        "isp": geo.get("org"),
+        "city": geo.get("city", "Unknown"),
+        "region": geo.get("region", "Unknown"),
+        "country": geo.get("country_name", "Unknown"),
+        "isp": geo.get("org", "Unknown"),
         "user_agent": ua
     }
 
-    # Append to logs.txt
+    # Append to logs.txt safely
     try:
         with open(LOG_FILE, "a") as f:
             f.write(json.dumps(entry) + "\n")
-    except:
-        pass
+    except Exception as e:
+        print("Failed to write logs:", e)
 
-    # Read all previous entries
+    # Read all previous entries safely
     all_entries = []
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, "r") as f:
-            for line in f:
-                try:
-                    all_entries.append(json.loads(line))
-                except:
-                    pass
+    try:
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, "r") as f:
+                for line in f:
+                    try:
+                        all_entries.append(json.loads(line))
+                    except:
+                        continue
+    except:
+        all_entries = []
 
+    # Render page
     return render_template_string(TEMPLATE, all_entries=all_entries)
 
 if __name__ == '__main__':
